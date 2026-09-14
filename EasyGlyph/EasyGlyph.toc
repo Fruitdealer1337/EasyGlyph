@@ -1,0 +1,9 @@
+## Interface: 30300
+## Title: EasyGlyph
+## Notes: Replaces WotLK glyph icons in the glyph frame, bags, vendors and other item views.
+## Author: Fruitdealer
+## Version: 1.0.0
+
+EasyGlyph.lua
+EasyGlyph_ItemData.lua
+EasyGlyph_ItemIcons.lua
