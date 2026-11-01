@@ -316,6 +316,7 @@ local glyphIconMap = {
     ["Glyph of Corruption"] = "spell_shadow_abominationexplosion",
     ["Glyph of Curse of Agony"] = "spell_shadow_curseofsargeras",
     ["Glyph of Curse of Exhaustion"] = "spell_shadow_grimward",
+    ["Glyph of Curse of Exhausion"] = "spell_shadow_grimward",
     ["Glyph of Death Coil"] = "spell_shadow_deathcoil",
     ["Glyph of Demonic Circle"] = "spell_shadow_demoniccirclesummon",
     ["Glyph of Drain Soul"] = "spell_shadow_haunting",
