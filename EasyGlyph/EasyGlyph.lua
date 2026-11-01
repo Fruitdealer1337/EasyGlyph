@@ -16,7 +16,7 @@ local SOCKET_RING_SUBLEVEL = 12
 local SOCKET_OVERLAY_FRAMELEVEL_BONUS = 20
 local SOCKET_RING_FRAMELEVEL_BONUS = 40
 
--- keep these local, HD icon packs can replace Interface\Icons
+-- keep icons local, HD packs can override the originals
 local glyphIconMap = {
     -- death knight
     ["Glyph of Anti-Magic Shell"] = "spell_shadow_antimagicshell",
@@ -522,7 +522,7 @@ local function HideNativeMajorRing(slotFrame)
         return
     end
 
-    -- leave highlight alone or hover dies
+    -- leave highlight alone, hover needs it
     if slotFrame.setting then
         SetTextureAlpha(slotFrame.setting, 0)
         HideTexture(slotFrame.setting)
@@ -872,7 +872,7 @@ local function PostGlyphSlotUpdate(a, b)
     local slotFrame
     local slotID
 
-    -- old glyph ui is inconsistent here
+    -- old glyph ui sometimes flips the args
     if type(a) == "table" then
         slotFrame = a
         slotID = b
@@ -1063,24 +1063,166 @@ local function InstallHooks()
     ApplyAll()
 end
 
+local talentedHooksInstalled
+local talentedFrameHooked
+
+local function RestoreTalentedSlot(slot, enabled)
+    HideSocketOverlay(slot)
+    HideSocketRing(slot)
+
+    if slot.glyph then
+        SetTextureAlpha(slot.glyph, 1)
+    end
+    if slot.background then
+        if enabled then
+            ShowTexture(slot.background)
+        else
+            HideTexture(slot.background)
+        end
+    end
+    if slot.setting then
+        SetTextureAlpha(slot.setting, 1)
+        ShowTexture(slot.setting)
+    end
+    if slot.ring then
+        SetTextureAlpha(slot.ring, 1)
+        if enabled then
+            ShowTexture(slot.ring)
+        else
+            HideTexture(slot.ring)
+        end
+    end
+end
+
+local function ApplyTalentedGlyph(slot)
+    local frame = _G.TalentedGlyphs
+    if not frame or not slot or type(GetGlyphSocketInfo) ~= "function" then
+        return
+    end
+    if slot:GetParent() ~= frame or not slot.id then
+        return
+    end
+
+    -- Talented can show the other spec too
+    local enabled, glyphType, spellID = GetGlyphSocketInfo(slot.id, frame.group)
+    local stem = enabled and spellID and GetIconStemFromValue(spellID)
+    if not stem or not slot.glyph then
+        RestoreTalentedSlot(slot, enabled)
+        return
+    end
+
+    local overlay = ApplySocketOverlayLayout(slot, glyphType)
+    if not overlay then
+        RestoreTalentedSlot(slot, enabled)
+        return
+    end
+
+    SetFullIconTexture(overlay, BuildTexturePath(stem, true))
+    ShowTexture(overlay)
+
+    -- hide Talented's extra minor backdrop
+    SetTextureAlpha(slot.glyph, 0)
+    if slot.background then
+        if glyphType == 2 then
+            HideTexture(slot.background)
+        else
+            ShowTexture(slot.background)
+        end
+    end
+
+    if glyphType == 1 then
+        local ring = ApplySocketRingLayout(slot, glyphType)
+        if ring then
+            HideNativeMajorRing(slot)
+            SetFullIconTexture(ring, ADDON_MAJOR_RING_PATH)
+            ShowTexture(ring)
+        else
+            RestoreNativeRing(slot)
+        end
+    else
+        HideSocketRing(slot)
+        RestoreNativeRing(slot)
+    end
+end
+
+local function RefreshTalentedGlyphs()
+    local frame = _G.TalentedGlyphs
+    if not frame or not frame.glyphs then
+        return
+    end
+    for i = 1, #frame.glyphs do
+        ApplyTalentedGlyph(frame.glyphs[i])
+    end
+end
+
+local function ConnectTalentedFrame()
+    local frame = _G.TalentedGlyphs
+    if not frame or not frame.glyphs or type(hooksecurefunc) ~= "function" then
+        return
+    end
+
+    if talentedFrameHooked ~= frame then
+        talentedFrameHooked = frame
+        frame:HookScript("OnShow", RefreshTalentedGlyphs)
+    end
+
+    for i = 1, #frame.glyphs do
+        local slot = frame.glyphs[i]
+        if slot and not slot._EasyGlyphTalentedHooked and type(slot.Update) == "function" then
+            hooksecurefunc(slot, "Update", ApplyTalentedGlyph)
+            slot._EasyGlyphTalentedHooked = true
+        end
+    end
+    RefreshTalentedGlyphs()
+end
+
+local function InstallTalentedHooks()
+    if talentedHooksInstalled or type(hooksecurefunc) ~= "function" then
+        return
+    end
+
+    local talented = _G.Talented
+    if not talented then
+        return
+    end
+
+    -- Talented might load after us
+    if type(talented.OpenGlyphFrame) == "function" then
+        hooksecurefunc(talented, "OpenGlyphFrame", ConnectTalentedFrame)
+    end
+    if type(talented.CreateGlyphFrame) == "function" then
+        hooksecurefunc(talented, "CreateGlyphFrame", ConnectTalentedFrame)
+    end
+    talentedHooksInstalled = true
+    ConnectTalentedFrame()
+end
+
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("ADDON_LOADED")
 loader:RegisterEvent("PLAYER_LOGIN")
 
 loader:SetScript("OnEvent", function(self, event, addonName)
-    if event == "ADDON_LOADED" and addonName == "Blizzard_GlyphUI" then
-        InstallHooks()
-        self:UnregisterEvent("ADDON_LOADED")
-        return
-    end
-
-    if event == "PLAYER_LOGIN" then
+    if event == "ADDON_LOADED" then
+        if addonName == "Blizzard_GlyphUI" then
+            InstallHooks()
+        elseif addonName == "Talented" then
+            InstallTalentedHooks()
+        end
+    elseif event == "PLAYER_LOGIN" then
         if type(IsAddOnLoaded) == "function" and IsAddOnLoaded("Blizzard_GlyphUI") then
             InstallHooks()
+        end
+        if type(IsAddOnLoaded) == "function" and IsAddOnLoaded("Talented") then
+            InstallTalentedHooks()
         end
     end
 end)
 
-if type(IsAddOnLoaded) == "function" and IsAddOnLoaded("Blizzard_GlyphUI") then
-    InstallHooks()
+if type(IsAddOnLoaded) == "function" then
+    if IsAddOnLoaded("Blizzard_GlyphUI") then
+        InstallHooks()
+    end
+    if IsAddOnLoaded("Talented") then
+        InstallTalentedHooks()
+    end
 end
